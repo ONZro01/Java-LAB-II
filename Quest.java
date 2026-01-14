@@ -1,25 +1,26 @@
-// [CP1] การออกแบบ Class และ Abstract Class สำหรับระบบ Quest
 public abstract class Quest {
     protected String id;
     protected String title;
-    protected int difficulty; // 1-5
+    protected int difficulty;
+    protected String requiredItem; // [Feature 2] เพิ่มไอเท็มที่ต้องใช้
 
-    public Quest(String id, String title, int difficulty) {
+    public Quest(String id, String title, int difficulty, String requiredItem) {
         this.id = id;
         this.title = title;
         this.difficulty = difficulty;
+        this.requiredItem = requiredItem;
     }
 
     public String getId() { return id; }
     public String getTitle() { return title; }
-    public int getDifficulty() { return difficulty; }
+    public String getRequiredItem() { return requiredItem; }
 
-    // [CP2] Abstract methods ที่ถูกนำไป Implement ต่างกันใน Subclass
     public abstract int rewardPoints(int key);
     public abstract boolean canComplete(int energy, int logic, int luck);
 
     @Override
     public String toString() {
-        return id + " | " + title + " | diff=" + difficulty;
+        String req = (requiredItem.equals("None")) ? "" : " [Requires: " + requiredItem + "]";
+        return id + " | " + title + " | diff=" + difficulty + req;
     }
 }

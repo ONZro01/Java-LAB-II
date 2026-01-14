@@ -1,5 +1,12 @@
 import java.util.*;
 
+// [Feature 1] Custom Exception สำหรับรหัสนักศึกษาไม่ถูก
+class InvalidStudentIdException extends Exception {
+    public InvalidStudentIdException(String message) {
+        super(message);
+    }
+}
+
 public class Main {
 
     static int sumDigits(String studentId) {
@@ -34,59 +41,103 @@ public class Main {
         }
     }
 
+    // [Feature 1] ฟังก์ชันตรวจสอบรหัสนักศึกษา
+    static void validateStudentId(String id) throws InvalidStudentIdException {
+        if (id.length() != 10 || !id.matches("\\d+")) {
+            throw new InvalidStudentIdException("รหัสนักศึกษาต้องเป็นตัวเลข 10 หลักเท่านั้น!");
+        }
+    }
+
     public static void main(String[] args) {
         Scanner sc = new Scanner(System.in);
+        QuestService qs = new QuestService();
+        String studentId = "";
 
-        System.out.println("=== Java II: Quest Manager (OOP) ===");
-        System.out.print("กรอกรหัสนักศึกษา (ตัวเลข): ");
-        String studentId = sc.nextLine().trim();
+        // [Feature 1] Loop จนกว่าจะกรอกรหัสถูก
+        while (true) {
+            try {
+                System.out.print("กรอกรหัสนักศึกษา (10 หลัก): ");
+                studentId = sc.nextLine().trim();
+                validateStudentId(studentId);
+                break;
+            } catch (InvalidStudentIdException e) {
+                System.out.println("Error: " + e.getMessage());
+            }
+        }
 
-        // [CP1] คำนวณค่า status จากรหัสนักศึกษา
         int key = sumDigits(studentId) % 97;
         int energy = (key * 7 + 13) % 100;
         int logic  = (key * 11 + 5) % 100;
         int luck   = (key * 17 + 19) % 100;
 
-        QuestService qs = new QuestService();
         qs.seedQuests(key);
 
         int totalScore = 0;
-
         while (true) {
-            System.out.println("\n[Menu] 1) List 2) Do quest 3) Stats 4) Exit");
-            int m = askInt(sc, "เลือกเมนู: ", 1, 4);
+            System.out.println("\n[Menu] 1) List 2) Do quest 3) Inventory/Stats 4) Exit");
+            System.out.println("[Status] Energy: " + energy + " | Logic: " + logic + " | Luck: " + luck);
+            int m = askInt(sc, "เลือก: ", 1, 4);
 
             if (m == 1) {
-                // [CP1] แสดงรายการเควสต์
                 qs.listQuests();
 
             } else if (m == 2) {
-                // [CP2] ระบบทำเควสต์และสะสมคะแนน
                 System.out.print("พิมพ์ quest id: ");
                 String id = sc.nextLine().trim();
 
-                Quest q = qs.findById(id);
-                if (q == null) {
-                    System.out.println("ไม่พบ quest id นี้");
-                    continue;
-                }
+                try {
+                    Quest q = qs.findById(id); // InvalidQuestException
 
-                boolean ok = q.canComplete(energy, logic, luck);
-                if (ok) {
-                    int r = q.rewardPoints(key);
-                    totalScore += r;
-                    // [CP3] อัปเดตสถิติใน HashMap
-                    qs.stats.put("completed", qs.stats.get("completed") + 1);
-                    System.out.println("สำเร็จ! +" + r + " points");
-                } else {
-                    qs.stats.put("failed", qs.stats.get("failed") + 1);
-                    System.out.println("ยังทำไม่ได้ (ต้องมี energy>75 หรือ logic>60 หรือ luck>70)");
+                    // [Feature 2] เช็คไอเท็ม
+                    if (!q.getRequiredItem().equals("None")) {
+                        int count = qs.inventory.getOrDefault(q.getRequiredItem(), 0);
+                        if (count <= 0) {
+                            System.out.println("ทำไม่ได้! คุณไม่มีไอเท็ม: " + q.getRequiredItem());
+                            continue;
+                        }
+                    }
+
+                    if (q.canComplete(energy, logic, luck)) {
+                        int r = q.rewardPoints(key);
+                        totalScore += r;
+                        qs.stats.put("completed", qs.stats.get("completed") + 1);
+                        
+                        // [Feature 2] ถ้าทำ DailyQuest สำเร็จ จะได้ไอเท็ม และเพิ่ม energy
+                        if (q instanceof DailyQuest) {
+                            DailyQuest dq = (DailyQuest) q;
+                            String reward = dq.getRewardItem();
+                            if (!reward.equals("None")) {
+                                qs.inventory.put(reward, qs.inventory.get(reward) + 1);
+                                System.out.println("ได้รับไอเท็ม: [" + reward + "] x1");
+                            }
+                            energy = Math.min(99, energy + 10); // เพิ่ม energy แต่ไม่เกิน 99
+                            System.out.println("Energy +10");
+                        }
+                        
+                        // [Feature 2] ถ้าทำ StoryQuest สำเร็จ จะเสียไอเท็ม และเพิ่ม logic + luck
+                        if (q instanceof StoryQuest) {
+                            String requiredItem = q.getRequiredItem();
+                            qs.inventory.put(requiredItem, qs.inventory.get(requiredItem) - 1);
+                            System.out.println("ใช้ไอเท็ม: [" + requiredItem + "] x1");
+                            logic = Math.min(99, logic + 8);  // เพิ่ม logic แต่ไม่เกิน 99
+                            luck = Math.min(99, luck + 8);    // เพิ่ม luck แต่ไม่เกิน 99
+                            System.out.println("Logic +8, Luck +8");
+                        }
+
+                        System.out.println("สำเร็จ! +" + r + " points");
+                    } else {
+                        qs.stats.put("failed", qs.stats.get("failed") + 1);
+                        System.out.println("Status ไม่เพียงพอ!");i
+                    }
+                } catch (InvalidQuestException e) {
+                    System.out.println("Error: " + e.getMessage());
                 }
 
             } else if (m == 3) {
-                // [CP3] แสดงสถิติจาก HashMap
-                System.out.println("completed=" + qs.stats.get("completed") + ", failed=" + qs.stats.get("failed"));
-                System.out.println("score=" + totalScore);
+                System.out.println("--- Stats ---");
+                System.out.println("Score: " + totalScore + " | Completed: " + qs.stats.get("completed"));
+                System.out.println("--- Inventory ---");
+                qs.inventory.forEach((k, v) -> System.out.println(k + ": " + v));
 
             } else {
                 break;
